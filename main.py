@@ -5,6 +5,7 @@ import json
 import jwt
 import random
 from datetime import datetime, timedelta, timezone
+from collections import defaultdict, deque
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ from typing import Optional, List, Dict, Any
 from database import create_document, get_documents, db
 from schemas import RunnerProfile, Session, ProEntitlement, AuthCode
 
-app = FastAPI(title="Runner Metronome API", version="0.3.2")
+app = FastAPI(title="Runner Metronome API", version="0.3.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,6 +58,23 @@ def mem_find(collection: str, filt: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [it for it in items if match(it)]
 
 # ---------------------------------------------------------------------
+# Simple in-memory rate limiter (per-process)
+# ---------------------------------------------------------------------
+RATE_LIMIT_AUTH_PER_MIN = int(os.getenv("RATE_LIMIT_AUTH_PER_MIN", "5"))
+RATE_LIMIT_WEBHOOK_PER_MIN = int(os.getenv("RATE_LIMIT_WEBHOOK_PER_MIN", "60"))
+_rate_store: Dict[str, deque] = defaultdict(deque)
+
+def _check_rate(key: str, limit: int, per_seconds: int = 60):
+    now = datetime.now(timezone.utc).timestamp()
+    dq = _rate_store[key]
+    # purge old timestamps
+    while dq and now - dq[0] > per_seconds:
+        dq.popleft()
+    if len(dq) >= limit:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    dq.append(now)
+
+# ---------------------------------------------------------------------
 # Utility: simple pace->BPM conversion based on run type and personalization
 # ---------------------------------------------------------------------
 
@@ -80,16 +98,14 @@ def pace_to_bpm(pace_value: float, pace_unit: str = "min_per_km", run_type: str 
         (3.0, 200), (4.0, 185), (5.0, 170), (6.0, 160), (7.0, 150), (8.0, 145)
     ]
     x = max(min(pace_min_per_km, anchors[-1][0]), anchors[0][0])
-    for i in range(len(anchors)-1):
-        x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
-        if anchors[i][0] <= x <= anchors[i+1][0]:
-            x1, y1 = anchors[i]
-            x2, y2 = anchors[i+1]
+    bpm = anchors[-1][1]
+    for i in range(len(anchors) - 1):
+        x1, y1 = anchors[i]
+        x2, y2 = anchors[i + 1]
+        if x1 <= x <= x2:
             t = (x - x1) / (x2 - x1)
             bpm = y1 + t * (y2 - y1)
             break
-    else:
-        bpm = anchors[-1][1]
     bpm += RUN_TYPE_OFFSETS.get(run_type, 0)
     if target_cadence:
         bpm = 0.75 * bpm + 0.25 * target_cadence
@@ -241,6 +257,10 @@ class StripeEvent(BaseModel):
 
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
+    # rate limit per-IP on webhook hits
+    client_ip = request.client.host if request.client else "anonymous"
+    _check_rate(key=f"webhook:{client_ip}", limit=RATE_LIMIT_WEBHOOK_PER_MIN, per_seconds=60)
+
     if STRIPE_WEBHOOK_SECRET:
         sig = request.headers.get("Stripe-Signature")
         payload = await request.body()
@@ -359,7 +379,10 @@ def create_checkout_session(req: CheckoutCreateRequest):
 # ---------------------------------------------------------------------
 
 @app.post("/api/auth/request-code")
-def request_code(req: AuthRequest):
+def request_code(req: AuthRequest, request: Request):
+    # Rate-limit by requester IP and email to prevent abuse
+    client_ip = request.client.host if request.client else "anonymous"
+    _check_rate(key=f"auth:{client_ip}", limit=RATE_LIMIT_AUTH_PER_MIN, per_seconds=60)
     if not req.email or "@" not in req.email:
         raise HTTPException(status_code=400, detail="Valid email required")
     code = f"{random.randint(0, 999999):06d}"
@@ -419,7 +442,17 @@ def test_database():
         "database_url": None,
         "database_name": None,
         "connection_status": "Not Connected",
-        "collections": []
+        "collections": [],
+        "stripe": {
+            "api_key": "✅ Set" if os.getenv("STRIPE_API_KEY") else "❌ Not Set",
+            "price_id": "✅ Set" if os.getenv("STRIPE_PRICE_ID") else "❌ Not Set",
+            "webhook_secret": "✅ Set" if os.getenv("STRIPE_WEBHOOK_SECRET") else "❌ Not Set",
+        },
+        "jwt": {
+            "issuer": JWT_ISSUER,
+            "audience": JWT_AUDIENCE,
+            "exp_hours": JWT_EXP_HOURS,
+        }
     }
     try:
         if db is not None:
