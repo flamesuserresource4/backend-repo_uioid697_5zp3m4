@@ -37,6 +37,16 @@ class Session(BaseModel):
     duration_seconds: int = Field(..., ge=1, description="How long the metronome ran")
     notes: Optional[str] = Field(None, description="Optional notes")
 
+class ProEntitlement(BaseModel):
+    """Represents Pro access for a user, typically granted after successful payment."""
+    user_id: Optional[str] = Field(None, description="Your internal user identifier")
+    email: Optional[str] = Field(None, description="Email used at checkout")
+    pro_active: bool = Field(True, description="Whether Pro is active for this user")
+    source: str = Field("stripe", description="Entitlement source, e.g. stripe")
+    stripe_customer_id: Optional[str] = Field(None, description="Stripe customer id")
+    stripe_checkout_session_id: Optional[str] = Field(None, description="Stripe checkout session id")
+    stripe_payment_intent_id: Optional[str] = Field(None, description="Stripe payment intent id")
+
 # Example schemas retained for reference (not used by app directly)
 class User(BaseModel):
     name: str = Field(..., description="Full name")

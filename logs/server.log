@@ -1,11 +1,11 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [160] using StatReload
-INFO:     Started server process [162]
+INFO:     Started reloader process [236] using StatReload
+INFO:     Started server process [238]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:47396 - "OPTIONS /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:47402 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46026 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46042 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -70,14 +70,13 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 145, in list_sessions
+  File "/home/workspace/main.py", line 120, in list_sessions
     items = get_documents("session", {}, limit)
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:47412 - "OPTIONS /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:47396 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:47412 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46046 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46026 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -142,16 +141,14 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 145, in list_sessions
+  File "/home/workspace/main.py", line 120, in list_sessions
     items = get_documents("session", {}, limit)
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:47396 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:33932 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:47414 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:47418 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:47426 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46056 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:49626 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:49636 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -216,12 +213,13 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 145, in list_sessions
+  File "/home/workspace/main.py", line 120, in list_sessions
     items = get_documents("session", {}, limit)
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:47418 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:49638 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:49626 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -286,7 +284,7 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 145, in list_sessions
+  File "/home/workspace/main.py", line 120, in list_sessions
     items = get_documents("session", {}, limit)
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")

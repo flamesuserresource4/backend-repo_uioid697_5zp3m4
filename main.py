@@ -1,13 +1,18 @@
 import os
-from fastapi import FastAPI, HTTPException
+import hmac
+import hashlib
+import json
+import jwt
+from datetime import datetime, timedelta, timezone
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 
-from database import create_document, get_documents
-from schemas import RunnerProfile, Session
+from database import create_document, get_documents, db
+from schemas import RunnerProfile, Session, ProEntitlement
 
-app = FastAPI(title="Runner Metronome API", version="0.1.0")
+app = FastAPI(title="Runner Metronome API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,7 +28,6 @@ def read_root():
 
 # ---------------------------------------------------------------------
 # Utility: simple pace->BPM conversion based on run type and personalization
-# This mirrors the spec's approach at a high level.
 # ---------------------------------------------------------------------
 
 RUN_TYPE_OFFSETS = {
@@ -39,59 +43,28 @@ RUN_TYPE_OFFSETS = {
 def pace_to_bpm(pace_value: float, pace_unit: str = "min_per_km", run_type: str = "easy", baseline_cadence: Optional[int] = None, target_cadence: Optional[int] = None) -> int:
     """
     Convert pace to target cadence (BPM = steps/minute).
-    - pace_value: minutes per unit (e.g., 5.0 = 5:00 pace)
-    - pace_unit: min_per_km or min_per_mile
-    - run_type: easy/tempo/interval/long/recovery/sprint
-    - baseline/target cadence for personalization
-
-    Heuristic baseline mapping:
-      3:00 min/km -> ~200 spm
-      4:00        -> ~185
-      5:00        -> ~170
-      6:00        -> ~160
-      7:00        -> ~150
-    Linear between points. Then apply run type offset and gently bias toward user's target.
+    Heuristic + personalization.
     """
-    # Normalize to min/km
-    pace_min_per_km = pace_value if pace_unit == "min_per_km" else pace_value * 0.621371  # approx conversion
-
-    # Piecewise linear map between key points
+    pace_min_per_km = pace_value if pace_unit == "min_per_km" else pace_value * 0.621371
     anchors = [
-        (3.0, 200),
-        (4.0, 185),
-        (5.0, 170),
-        (6.0, 160),
-        (7.0, 150),
-        (8.0, 145),
+        (3.0, 200), (4.0, 185), (5.0, 170), (6.0, 160), (7.0, 150), (8.0, 145)
     ]
-    # Clamp pace range
     x = max(min(pace_min_per_km, anchors[-1][0]), anchors[0][0])
-
-    # Find segment
-    for i in range(len(anchors) - 1):
-        x1, y1 = anchors[i]
-        x2, y2 = anchors[i + 1]
+    for i in range(len(anchors)-1):
+        x1, y1 = anchors[i]; x2, y2 = anchors[i+1]
         if x1 <= x <= x2:
-            # linear interpolate
             t = (x - x1) / (x2 - x1)
             bpm = y1 + t * (y2 - y1)
             break
     else:
         bpm = anchors[-1][1]
-
-    # Run type offset
     bpm += RUN_TYPE_OFFSETS.get(run_type, 0)
-
-    # Personalization bias: move 25% toward user's target_cadence if provided
     if target_cadence:
         bpm = 0.75 * bpm + 0.25 * target_cadence
-
-    # If baseline provided, nudge by +/- 2 if far off baseline
     if baseline_cadence:
         diff = bpm - baseline_cadence
         if abs(diff) > 10:
             bpm -= 2 if diff > 0 else -2
-
     bpm_int = int(round(bpm))
     return max(120, min(220, bpm_int))
 
@@ -106,6 +79,9 @@ class BPMRequest(BaseModel):
     baseline_cadence: Optional[int] = None
     target_cadence: Optional[int] = None
 
+class ProClaimRequest(BaseModel):
+    email: Optional[str] = None
+    user_id: Optional[str] = None
 
 # ---------------------------------------------------------------------
 # API Endpoints
@@ -130,7 +106,6 @@ def create_profile(profile: RunnerProfile):
 @app.get("/api/profiles")
 def list_profiles(limit: int = 20):
     items = get_documents("runnerprofile", {}, limit)
-    # string-ify ObjectId
     for it in items:
         it["_id"] = str(it.get("_id"))
     return {"items": items}
@@ -147,9 +122,111 @@ def list_sessions(limit: int = 50):
         it["_id"] = str(it.get("_id"))
     return {"items": items}
 
+# ---------------------------------------------------------------------
+# Pro entitlement: webhook + verification + JWT minting
+# ---------------------------------------------------------------------
+
+JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
+JWT_ISSUER = "runner-metronome"
+JWT_AUDIENCE = "runner-metronome-app"
+JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", "720"))  # 30 days default
+
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+class StripeEvent(BaseModel):
+    id: str
+    type: str
+    data: dict
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    if STRIPE_WEBHOOK_SECRET:
+        sig = request.headers.get("Stripe-Signature")
+        payload = await request.body()
+        try:
+            import stripe
+            stripe.Webhook.construct_event(payload=payload, sig_header=sig, secret=STRIPE_WEBHOOK_SECRET)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid signature: {str(e)[:80]}")
+        event = json.loads(payload.decode("utf-8"))
+    else:
+        # Fallback: accept raw JSON in dev if secret not configured
+        event = await request.json()
+
+    event_type = event.get("type")
+    obj = event.get("data", {}).get("object", {})
+
+    # Handle successful one-time payment or checkout completion
+    if event_type in ("checkout.session.completed", "payment_intent.succeeded"):
+        email = obj.get("customer_details", {}).get("email") or obj.get("receipt_email") or obj.get("customer_email")
+        customer_id = obj.get("customer")
+        checkout_session_id = obj.get("id") if event_type == "checkout.session.completed" else None
+        payment_intent_id = obj.get("payment_intent") if event_type == "checkout.session.completed" else obj.get("id")
+
+        if not email and not customer_id:
+            # Nothing to bind entitlement to
+            return {"status": "ignored"}
+
+        ent = ProEntitlement(
+            email=email,
+            pro_active=True,
+            source="stripe",
+            stripe_customer_id=customer_id,
+            stripe_checkout_session_id=checkout_session_id,
+            stripe_payment_intent_id=payment_intent_id,
+        )
+        try:
+            create_document("proentitlement", ent)
+        except Exception as e:
+            # best-effort; ignore if duplicates
+            pass
+        return {"status": "ok"}
+
+    return {"status": "unhandled"}
+
+
+def mint_jwt(user_id: Optional[str] = None, email: Optional[str] = None) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id or email or "anon",
+        "email": email,
+        "pro": True,
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=JWT_EXP_HOURS)).timestamp()),
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    return token
+
+@app.post("/api/pro/claim")
+def claim_pro(req: ProClaimRequest):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    # Try to locate a prior Stripe-based entitlement by email or user_id
+    query = {}
+    if req.email:
+        query["email"] = req.email
+    if req.user_id:
+        query["user_id"] = req.user_id
+
+    items = get_documents("proentitlement", query or {}, limit=1)
+    if items:
+        token = mint_jwt(user_id=req.user_id, email=req.email)
+        return {"pro": True, "token": token}
+    raise HTTPException(status_code=404, detail="No entitlement found")
+
+@app.post("/api/pro/verify")
+def verify_pro(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"], audience=JWT_AUDIENCE, issuer=JWT_ISSUER)
+        return {"pro": bool(payload.get("pro")), "exp": payload.get("exp"), "email": payload.get("email")}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)[:80]}")
+
 @app.get("/test")
 def test_database():
-    from database import db
     response = {
         "backend": "✅ Running",
         "database": "❌ Not Available",
