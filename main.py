@@ -14,11 +14,24 @@ from typing import Optional, List, Dict, Any
 from database import create_document, get_documents, db
 from schemas import RunnerProfile, Session, ProEntitlement, AuthCode
 
-app = FastAPI(title="Runner Metronome API", version="0.3.3")
+app = FastAPI(title="Runner Metronome API", version="0.4.0")
+
+# ---------------------------------------------------------------------
+# CORS: allowlist from env
+# ---------------------------------------------------------------------
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+if _raw_origins:
+    ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+else:
+    # Safe defaults for local dev only
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,6 +61,7 @@ def mem_insert(collection: str, doc: Dict[str, Any]):
     MEMORY.setdefault(collection, []).append(doc)
     return doc["_id"]
 
+
 def mem_find(collection: str, filt: Dict[str, Any]) -> List[Dict[str, Any]]:
     items = MEMORY.get(collection, [])
     def match(it):
@@ -63,6 +77,7 @@ def mem_find(collection: str, filt: Dict[str, Any]) -> List[Dict[str, Any]]:
 RATE_LIMIT_AUTH_PER_MIN = int(os.getenv("RATE_LIMIT_AUTH_PER_MIN", "5"))
 RATE_LIMIT_WEBHOOK_PER_MIN = int(os.getenv("RATE_LIMIT_WEBHOOK_PER_MIN", "60"))
 _rate_store: Dict[str, deque] = defaultdict(deque)
+
 
 def _check_rate(key: str, limit: int, per_seconds: int = 60):
     now = datetime.now(timezone.utc).timestamp()
@@ -127,15 +142,19 @@ class BPMRequest(BaseModel):
     baseline_cadence: Optional[int] = None
     target_cadence: Optional[int] = None
 
+
 class ProClaimRequest(BaseModel):
     email: Optional[str] = None
     user_id: Optional[str] = None
 
+
 class CheckoutCreateRequest(BaseModel):
     email: Optional[str] = None
 
+
 class AuthRequest(BaseModel):
     email: str
+
 
 class AuthVerify(BaseModel):
     email: str
@@ -156,6 +175,7 @@ def convert_pace_to_bpm(req: BPMRequest):
     )
     return {"bpm": bpm}
 
+
 # Profile CRUD-light
 @app.put("/api/profile")
 def upsert_profile(profile: RunnerProfile):
@@ -168,6 +188,7 @@ def upsert_profile(profile: RunnerProfile):
         else:
             raise
     return {"id": profile_id}
+
 
 @app.get("/api/profile")
 def get_profile(user_id: str):
@@ -184,6 +205,7 @@ def get_profile(user_id: str):
     it["_id"] = str(it.get("_id"))
     return it
 
+
 @app.get("/api/profiles")
 def list_profiles(limit: int = 20):
     try:
@@ -197,6 +219,7 @@ def list_profiles(limit: int = 20):
         it["_id"] = str(it.get("_id"))
     return {"items": items}
 
+
 @app.post("/api/sessions")
 def create_session(session: Session):
     try:
@@ -207,6 +230,7 @@ def create_session(session: Session):
         else:
             raise
     return {"id": session_id}
+
 
 @app.get("/api/sessions")
 def list_sessions(request: Request, user_id: Optional[str] = None, limit: Optional[int] = None, authorization: Optional[str] = Header(None)):
@@ -250,10 +274,12 @@ STRIPE_SUCCESS_URL = os.getenv("STRIPE_SUCCESS_URL", "http://localhost:3000/?pro
 STRIPE_CANCEL_URL = os.getenv("STRIPE_CANCEL_URL", "http://localhost:3000/")
 DEBUG_AUTH_CODES = os.getenv("DEBUG_AUTH_CODES", "0") == "1"
 
+
 class StripeEvent(BaseModel):
     id: str
     type: str
     data: dict
+
 
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
@@ -287,6 +313,14 @@ async def stripe_webhook(request: Request):
         if not email and not customer_id:
             # Nothing to bind entitlement to
             return {"status": "ignored"}
+
+        # Idempotency: if we've already stored an entitlement for this PI, skip
+        try:
+            existing = get_documents("proentitlement", {"stripe_payment_intent_id": payment_intent_id}, limit=1)
+        except Exception:
+            existing = mem_find("proentitlement", {"stripe_payment_intent_id": payment_intent_id})[:1] if (db is None and DEV_ALLOW_MEMORY) else []
+        if existing:
+            return {"status": "already_processed"}
 
         ent = ProEntitlement(
             email=email,
@@ -323,6 +357,7 @@ def mint_jwt(user_id: Optional[str] = None, email: Optional[str] = None) -> str:
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
     return token
 
+
 @app.post("/api/pro/claim")
 def claim_pro(req: ProClaimRequest):
     # Try to locate a prior Stripe-based entitlement by email or user_id
@@ -345,6 +380,7 @@ def claim_pro(req: ProClaimRequest):
         return {"pro": True, "token": token}
     raise HTTPException(status_code=404, detail="No entitlement found")
 
+
 @app.post("/api/pro/verify")
 def verify_pro(token: str):
     try:
@@ -352,6 +388,7 @@ def verify_pro(token: str):
         return {"pro": bool(payload.get("pro")), "exp": payload.get("exp"), "email": payload.get("email")}
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)[:80]}")
+
 
 @app.post("/api/checkout/create")
 def create_checkout_session(req: CheckoutCreateRequest):
@@ -378,6 +415,29 @@ def create_checkout_session(req: CheckoutCreateRequest):
 # Passwordless email sign-in (magic code)
 # ---------------------------------------------------------------------
 
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS")
+
+
+def _send_email_via_sendgrid(to_email: str, subject: str, content_text: str):
+    if not SENDGRID_API_KEY or not EMAIL_FROM_ADDRESS:
+        return False
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+        message = Mail(
+            from_email=EMAIL_FROM_ADDRESS,
+            to_emails=to_email,
+            subject=subject,
+            plain_text_content=content_text,
+        )
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+        return True
+    except Exception:
+        return False
+
+
 @app.post("/api/auth/request-code")
 def request_code(req: AuthRequest, request: Request):
     # Rate-limit by requester IP and email to prevent abuse
@@ -395,8 +455,17 @@ def request_code(req: AuthRequest, request: Request):
             mem_insert("authcode", rec.model_dump())
         else:
             raise HTTPException(status_code=500, detail="Database not available")
-    # In production you'd send the code via email. For dev, optionally return it when DEBUG_AUTH_CODES=1
-    return {"ok": True, "debug_code": code if DEBUG_AUTH_CODES else None}
+
+    # Try to email the code if provider configured
+    emailed = _send_email_via_sendgrid(
+        to_email=req.email,
+        subject="Your Runner Metronome Login Code",
+        content_text=f"Your one-time code is: {code}\nIt expires in 10 minutes.",
+    )
+
+    # For dev, optionally return it when DEBUG_AUTH_CODES=1
+    return {"ok": True, "emailed": emailed, "debug_code": code if DEBUG_AUTH_CODES else None}
+
 
 @app.post("/api/auth/verify-code")
 def verify_code(req: AuthVerify):
@@ -420,6 +489,16 @@ def verify_code(req: AuthVerify):
     if datetime.now(timezone.utc) - created_at > window:
         raise HTTPException(status_code=401, detail="Code expired")
 
+    # consume the code: delete matching records
+    try:
+        if db is not None:
+            db["authcode"].delete_many({"email": req.email, "code": req.code})
+        else:
+            # remove from memory
+            MEMORY["authcode"] = [d for d in MEMORY.get("authcode", []) if not (d.get("email") == req.email and d.get("code") == req.code)]
+    except Exception:
+        pass
+
     # Successful sign-in: lightweight identity is the email itself
     user_id = req.email
 
@@ -433,6 +512,7 @@ def verify_code(req: AuthVerify):
         token = mint_jwt(user_id=user_id, email=req.email)
 
     return {"user_id": user_id, "pro_token": token}
+
 
 @app.get("/test")
 def test_database():
@@ -452,6 +532,9 @@ def test_database():
             "issuer": JWT_ISSUER,
             "audience": JWT_AUDIENCE,
             "exp_hours": JWT_EXP_HOURS,
+        },
+        "cors": {
+            "allowed_origins": ALLOWED_ORIGINS,
         }
     }
     try:

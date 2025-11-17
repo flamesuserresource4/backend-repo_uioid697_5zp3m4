@@ -9,3 +9,4 @@ stripe==6.7.0
 PyJWT==2.8.0
 httpx==0.26.0
 pytest==7.4.2
+sendgrid==6.11.0
