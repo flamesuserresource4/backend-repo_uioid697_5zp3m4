@@ -4,7 +4,7 @@ import hashlib
 import json
 import jwt
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -12,7 +12,7 @@ from typing import Optional
 from database import create_document, get_documents, db
 from schemas import RunnerProfile, Session, ProEntitlement
 
-app = FastAPI(title="Runner Metronome API", version="0.2.0")
+app = FastAPI(title="Runner Metronome API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -83,6 +83,9 @@ class ProClaimRequest(BaseModel):
     email: Optional[str] = None
     user_id: Optional[str] = None
 
+class CheckoutCreateRequest(BaseModel):
+    email: Optional[str] = None
+
 # ---------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------
@@ -98,10 +101,21 @@ def convert_pace_to_bpm(req: BPMRequest):
     )
     return {"bpm": bpm}
 
-@app.post("/api/profile")
-def create_profile(profile: RunnerProfile):
+# Profile CRUD-light
+@app.put("/api/profile")
+def upsert_profile(profile: RunnerProfile):
+    # simple upsert semantics: store a new document; client can load latest by user_id
     profile_id = create_document("runnerprofile", profile)
     return {"id": profile_id}
+
+@app.get("/api/profile")
+def get_profile(user_id: str):
+    items = get_documents("runnerprofile", {"user_id": user_id}, limit=1)
+    if not items:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    it = items[0]
+    it["_id"] = str(it.get("_id"))
+    return it
 
 @app.get("/api/profiles")
 def list_profiles(limit: int = 20):
@@ -116,22 +130,39 @@ def create_session(session: Session):
     return {"id": session_id}
 
 @app.get("/api/sessions")
-def list_sessions(limit: int = 50):
-    items = get_documents("session", {}, limit)
+def list_sessions(request: Request, user_id: Optional[str] = None, limit: Optional[int] = None, authorization: Optional[str] = Header(None)):
+    # Determine pro access from JWT in Authorization: Bearer <token>
+    is_pro = False
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"], audience=JWT_AUDIENCE, issuer=JWT_ISSUER)
+            is_pro = bool(payload.get("pro"))
+        except Exception:
+            is_pro = False
+    # Cap results for non-pro
+    effective_limit = limit or (50 if is_pro else 5)
+    query = {}
+    if user_id:
+        query["user_id"] = user_id
+    items = get_documents("session", query, effective_limit)
     for it in items:
         it["_id"] = str(it.get("_id"))
-    return {"items": items}
+    return {"items": items, "pro": is_pro}
 
 # ---------------------------------------------------------------------
 # Pro entitlement: webhook + verification + JWT minting
 # ---------------------------------------------------------------------
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
-JWT_ISSUER = "runner-metronome"
-JWT_AUDIENCE = "runner-metronome-app"
+JWT_ISSUER = os.getenv("JWT_ISSUER", "runner-metronome")
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "runner-metronome-app")
 JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", "720"))  # 30 days default
 
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
+STRIPE_SUCCESS_URL = os.getenv("STRIPE_SUCCESS_URL", "http://localhost:3000/?pro=1")
+STRIPE_CANCEL_URL = os.getenv("STRIPE_CANCEL_URL", "http://localhost:3000/")
 
 class StripeEvent(BaseModel):
     id: str
@@ -177,7 +208,7 @@ async def stripe_webhook(request: Request):
         )
         try:
             create_document("proentitlement", ent)
-        except Exception as e:
+        except Exception:
             # best-effort; ignore if duplicates
             pass
         return {"status": "ok"}
@@ -224,6 +255,27 @@ def verify_pro(token: str):
         return {"pro": bool(payload.get("pro")), "exp": payload.get("exp"), "email": payload.get("email")}
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)[:80]}")
+
+@app.post("/api/checkout/create")
+def create_checkout_session(req: CheckoutCreateRequest):
+    if not STRIPE_PRICE_ID:
+        raise HTTPException(status_code=500, detail="Stripe price not configured")
+    try:
+        import stripe
+        stripe.api_key = os.getenv("STRIPE_API_KEY")
+        if not stripe.api_key:
+            raise HTTPException(status_code=500, detail="Stripe API key not configured")
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            success_url=STRIPE_SUCCESS_URL,
+            cancel_url=STRIPE_CANCEL_URL,
+            customer_email=req.email if req.email else None,
+            allow_promotion_codes=False,
+        )
+        return {"url": session.get("url")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)[:120]}")
 
 @app.get("/test")
 def test_database():
