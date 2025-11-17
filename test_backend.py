@@ -1,11 +1,12 @@
 import os
 import json
+
+# Ensure dev-friendly behavior for tests BEFORE app import
+os.environ["DEV_ALLOW_MEMORY"] = "1"
+os.environ["DEBUG_AUTH_CODES"] = "1"
+
 from fastapi.testclient import TestClient
 from main import app
-
-# Ensure dev-friendly behavior for tests
-os.environ.setdefault("DEV_ALLOW_MEMORY", "1")
-os.environ.setdefault("DEBUG_AUTH_CODES", "1")
 
 client = TestClient(app)
 
