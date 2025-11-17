@@ -1,15 +1,15 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [914] using StatReload
-INFO:     Started server process [916]
+INFO:     Started reloader process [1002] using StatReload
+INFO:     Started server process [1004]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:35080 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:50814 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50826 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50816 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50814 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50826 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50816 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50814 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:50826 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:60078 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:60094 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:60082 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:60110 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:60082 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54016 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54030 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54032 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54032 - "GET /api/sessions HTTP/1.1" 200 OK
