@@ -12,15 +12,33 @@ Model name is converted to lowercase for the collection name:
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
-# Example schemas (replace with your own):
+# ---------------------------------------------------------------------
+# Runner Metronome App Schemas
+# ---------------------------------------------------------------------
 
+class RunnerProfile(BaseModel):
+    """User preferences and personalization for cadence and pacing."""
+    user_id: str = Field(..., description="External auth user id or email")
+    display_name: Optional[str] = Field(None, description="Name to show in UI")
+    preferred_unit: str = Field("min_per_km", description="min_per_km or min_per_mile")
+    baseline_cadence: Optional[int] = Field(None, ge=120, le=210, description="User's natural cadence in spm")
+    target_cadence: Optional[int] = Field(None, ge=120, le=210, description="Preferred target cadence in spm")
+    run_type: Optional[str] = Field(None, description="easy, tempo, interval, long, recovery, sprint")
+
+class Session(BaseModel):
+    """A recorded metronome session/workout summary."""
+    user_id: Optional[str] = Field(None, description="External auth user id or email")
+    pace_value: float = Field(..., gt=0, description="Pace numeric value (e.g., 5.0 meaning 5:00)")
+    pace_unit: str = Field("min_per_km", description="min_per_km or min_per_mile")
+    run_type: str = Field("easy", description="easy, tempo, interval, long, recovery, sprint")
+    target_bpm: int = Field(..., ge=120, le=220, description="Cadence in steps per minute")
+    duration_seconds: int = Field(..., ge=1, description="How long the metronome ran")
+    notes: Optional[str] = Field(None, description="Optional notes")
+
+# Example schemas retained for reference (not used by app directly)
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
     name: str = Field(..., description="Full name")
     email: str = Field(..., description="Email address")
     address: str = Field(..., description="Address")
@@ -28,21 +46,8 @@ class User(BaseModel):
     is_active: bool = Field(True, description="Whether user is active")
 
 class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
     title: str = Field(..., description="Product title")
     description: Optional[str] = Field(None, description="Product description")
     price: float = Field(..., ge=0, description="Price in dollars")
     category: str = Field(..., description="Product category")
     in_stock: bool = Field(True, description="Whether product is in stock")
-
-# Add your own schemas here:
-# --------------------------------------------------
-
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
