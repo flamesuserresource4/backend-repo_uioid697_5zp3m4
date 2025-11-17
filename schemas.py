@@ -47,6 +47,12 @@ class ProEntitlement(BaseModel):
     stripe_checkout_session_id: Optional[str] = Field(None, description="Stripe checkout session id")
     stripe_payment_intent_id: Optional[str] = Field(None, description="Stripe payment intent id")
 
+class AuthCode(BaseModel):
+    """One-time verification code for passwordless sign-in."""
+    email: str = Field(..., description="Email to verify")
+    code: str = Field(..., description="One-time code as plain text (demo)")
+    expires_in_minutes: int = Field(10, description="Validity window in minutes")
+
 # Example schemas retained for reference (not used by app directly)
 class User(BaseModel):
     name: str = Field(..., description="Full name")

@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import json
 import jwt
+import random
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +11,9 @@ from pydantic import BaseModel
 from typing import Optional
 
 from database import create_document, get_documents, db
-from schemas import RunnerProfile, Session, ProEntitlement
+from schemas import RunnerProfile, Session, ProEntitlement, AuthCode
 
-app = FastAPI(title="Runner Metronome API", version="0.3.0")
+app = FastAPI(title="Runner Metronome API", version="0.3.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +86,13 @@ class ProClaimRequest(BaseModel):
 
 class CheckoutCreateRequest(BaseModel):
     email: Optional[str] = None
+
+class AuthRequest(BaseModel):
+    email: str
+
+class AuthVerify(BaseModel):
+    email: str
+    code: str
 
 # ---------------------------------------------------------------------
 # API Endpoints
@@ -163,6 +171,7 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
 STRIPE_SUCCESS_URL = os.getenv("STRIPE_SUCCESS_URL", "http://localhost:3000/?pro=1")
 STRIPE_CANCEL_URL = os.getenv("STRIPE_CANCEL_URL", "http://localhost:3000/")
+DEBUG_AUTH_CODES = os.getenv("DEBUG_AUTH_CODES", "0") == "1"
 
 class StripeEvent(BaseModel):
     id: str
@@ -276,6 +285,51 @@ def create_checkout_session(req: CheckoutCreateRequest):
         return {"url": session.get("url")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)[:120]}")
+
+# ---------------------------------------------------------------------
+# Passwordless email sign-in (magic code)
+# ---------------------------------------------------------------------
+
+@app.post("/api/auth/request-code")
+def request_code(req: AuthRequest):
+    if not req.email or "@" not in req.email:
+        raise HTTPException(status_code=400, detail="Valid email required")
+    code = f"{random.randint(0, 999999):06d}"
+    # store auth code record
+    rec = AuthCode(email=req.email, code=code)
+    try:
+        create_document("authcode", rec)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Database not available")
+    # In production you'd send the code via email. For dev, optionally return it when DEBUG_AUTH_CODES=1
+    return {"ok": True, "debug_code": code if DEBUG_AUTH_CODES else None}
+
+@app.post("/api/auth/verify-code")
+def verify_code(req: AuthVerify):
+    if not req.email or not req.code:
+        raise HTTPException(status_code=400, detail="Email and code required")
+    items = get_documents("authcode", {"email": req.email, "code": req.code}, limit=1)
+    if not items:
+        raise HTTPException(status_code=401, detail="Invalid code")
+    rec = items[0]
+    created_at = rec.get("created_at")
+    if not created_at:
+        raise HTTPException(status_code=401, detail="Invalid code")
+    # expiry window
+    window = timedelta(minutes=rec.get("expires_in_minutes", 10))
+    if datetime.now(timezone.utc) - created_at > window:
+        raise HTTPException(status_code=401, detail="Code expired")
+
+    # Successful sign-in: lightweight identity is the email itself
+    user_id = req.email
+
+    # Optionally attach Pro token if entitlement exists
+    ent = get_documents("proentitlement", {"email": req.email}, limit=1)
+    token = None
+    if ent:
+        token = mint_jwt(user_id=user_id, email=req.email)
+
+    return {"user_id": user_id, "pro_token": token}
 
 @app.get("/test")
 def test_database():
