@@ -8,12 +8,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from database import create_document, get_documents, db
 from schemas import RunnerProfile, Session, ProEntitlement, AuthCode
 
-app = FastAPI(title="Runner Metronome API", version="0.3.1")
+app = FastAPI(title="Runner Metronome API", version="0.3.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +26,35 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"message": "Runner Metronome Backend is running"}
+
+# ---------------------------------------------------------------------
+# Dev fallback store (only when DB is not configured)
+# ---------------------------------------------------------------------
+DEV_ALLOW_MEMORY = os.getenv("DEV_ALLOW_MEMORY", "1") == "1"
+MEMORY: Dict[str, List[Dict[str, Any]]] = {
+    "proentitlement": [],
+    "authcode": [],
+    "runnerprofile": [],
+    "session": [],
+}
+
+def mem_insert(collection: str, doc: Dict[str, Any]):
+    doc = dict(doc)
+    doc["_id"] = f"mem_{len(MEMORY.get(collection, [])) + 1}"
+    now = datetime.now(timezone.utc)
+    doc["created_at"] = now
+    doc["updated_at"] = now
+    MEMORY.setdefault(collection, []).append(doc)
+    return doc["_id"]
+
+def mem_find(collection: str, filt: Dict[str, Any]) -> List[Dict[str, Any]]:
+    items = MEMORY.get(collection, [])
+    def match(it):
+        for k, v in (filt or {}).items():
+            if it.get(k) != v:
+                return False
+        return True
+    return [it for it in items if match(it)]
 
 # ---------------------------------------------------------------------
 # Utility: simple pace->BPM conversion based on run type and personalization
@@ -52,8 +81,10 @@ def pace_to_bpm(pace_value: float, pace_unit: str = "min_per_km", run_type: str 
     ]
     x = max(min(pace_min_per_km, anchors[-1][0]), anchors[0][0])
     for i in range(len(anchors)-1):
-        x1, y1 = anchors[i]; x2, y2 = anchors[i+1]
-        if x1 <= x <= x2:
+        x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
+        if anchors[i][0] <= x <= anchors[i+1][0]:
+            x1, y1 = anchors[i]
+            x2, y2 = anchors[i+1]
             t = (x - x1) / (x2 - x1)
             bpm = y1 + t * (y2 - y1)
             break
@@ -113,12 +144,24 @@ def convert_pace_to_bpm(req: BPMRequest):
 @app.put("/api/profile")
 def upsert_profile(profile: RunnerProfile):
     # simple upsert semantics: store a new document; client can load latest by user_id
-    profile_id = create_document("runnerprofile", profile)
+    try:
+        profile_id = create_document("runnerprofile", profile)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            profile_id = mem_insert("runnerprofile", profile.model_dump())
+        else:
+            raise
     return {"id": profile_id}
 
 @app.get("/api/profile")
 def get_profile(user_id: str):
-    items = get_documents("runnerprofile", {"user_id": user_id}, limit=1)
+    try:
+        items = get_documents("runnerprofile", {"user_id": user_id}, limit=1)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            items = mem_find("runnerprofile", {"user_id": user_id})[:1]
+        else:
+            raise
     if not items:
         raise HTTPException(status_code=404, detail="Profile not found")
     it = items[0]
@@ -127,14 +170,26 @@ def get_profile(user_id: str):
 
 @app.get("/api/profiles")
 def list_profiles(limit: int = 20):
-    items = get_documents("runnerprofile", {}, limit)
+    try:
+        items = get_documents("runnerprofile", {}, limit)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            items = MEMORY.get("runnerprofile", [])[:limit]
+        else:
+            raise
     for it in items:
         it["_id"] = str(it.get("_id"))
     return {"items": items}
 
 @app.post("/api/sessions")
 def create_session(session: Session):
-    session_id = create_document("session", session)
+    try:
+        session_id = create_document("session", session)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            session_id = mem_insert("session", session.model_dump())
+        else:
+            raise
     return {"id": session_id}
 
 @app.get("/api/sessions")
@@ -153,7 +208,13 @@ def list_sessions(request: Request, user_id: Optional[str] = None, limit: Option
     query = {}
     if user_id:
         query["user_id"] = user_id
-    items = get_documents("session", query, effective_limit)
+    try:
+        items = get_documents("session", query, effective_limit)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            items = mem_find("session", query)[:effective_limit]
+        else:
+            raise
     for it in items:
         it["_id"] = str(it.get("_id"))
     return {"items": items, "pro": is_pro}
@@ -215,11 +276,14 @@ async def stripe_webhook(request: Request):
             stripe_checkout_session_id=checkout_session_id,
             stripe_payment_intent_id=payment_intent_id,
         )
+        # Try DB, fall back to memory in dev
         try:
             create_document("proentitlement", ent)
         except Exception:
-            # best-effort; ignore if duplicates
-            pass
+            if db is None and DEV_ALLOW_MEMORY:
+                mem_insert("proentitlement", ent.model_dump())
+            else:
+                raise
         return {"status": "ok"}
 
     return {"status": "unhandled"}
@@ -241,9 +305,6 @@ def mint_jwt(user_id: Optional[str] = None, email: Optional[str] = None) -> str:
 
 @app.post("/api/pro/claim")
 def claim_pro(req: ProClaimRequest):
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
     # Try to locate a prior Stripe-based entitlement by email or user_id
     query = {}
     if req.email:
@@ -251,9 +312,16 @@ def claim_pro(req: ProClaimRequest):
     if req.user_id:
         query["user_id"] = req.user_id
 
-    items = get_documents("proentitlement", query or {}, limit=1)
+    items: List[Dict[str, Any]] = []
+    try:
+        items = get_documents("proentitlement", query or {}, limit=1)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            items = mem_find("proentitlement", query)[:1]
+        else:
+            raise
     if items:
-        token = mint_jwt(user_id=req.user_id, email=req.email)
+        token = mint_jwt(user_id=req.user_id, email=req.email or items[0].get("email"))
         return {"pro": True, "token": token}
     raise HTTPException(status_code=404, detail="No entitlement found")
 
@@ -295,12 +363,15 @@ def request_code(req: AuthRequest):
     if not req.email or "@" not in req.email:
         raise HTTPException(status_code=400, detail="Valid email required")
     code = f"{random.randint(0, 999999):06d}"
-    # store auth code record
     rec = AuthCode(email=req.email, code=code)
+    # store auth code record
     try:
         create_document("authcode", rec)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Database not available")
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            mem_insert("authcode", rec.model_dump())
+        else:
+            raise HTTPException(status_code=500, detail="Database not available")
     # In production you'd send the code via email. For dev, optionally return it when DEBUG_AUTH_CODES=1
     return {"ok": True, "debug_code": code if DEBUG_AUTH_CODES else None}
 
@@ -308,7 +379,13 @@ def request_code(req: AuthRequest):
 def verify_code(req: AuthVerify):
     if not req.email or not req.code:
         raise HTTPException(status_code=400, detail="Email and code required")
-    items = get_documents("authcode", {"email": req.email, "code": req.code}, limit=1)
+    try:
+        items = get_documents("authcode", {"email": req.email, "code": req.code}, limit=1)
+    except Exception:
+        if db is None and DEV_ALLOW_MEMORY:
+            items = mem_find("authcode", {"email": req.email, "code": req.code})[:1]
+        else:
+            raise HTTPException(status_code=500, detail="Database not available")
     if not items:
         raise HTTPException(status_code=401, detail="Invalid code")
     rec = items[0]
@@ -324,7 +401,10 @@ def verify_code(req: AuthVerify):
     user_id = req.email
 
     # Optionally attach Pro token if entitlement exists
-    ent = get_documents("proentitlement", {"email": req.email}, limit=1)
+    try:
+        ent = get_documents("proentitlement", {"email": req.email}, limit=1)
+    except Exception:
+        ent = mem_find("proentitlement", {"email": req.email})[:1] if (db is None and DEV_ALLOW_MEMORY) else []
     token = None
     if ent:
         token = mint_jwt(user_id=user_id, email=req.email)
@@ -355,6 +435,8 @@ def test_database():
                 response["database"] = f"⚠️ Connected but Error: {str(e)[:50]}"
         else:
             response["database"] = "⚠️ Available but not initialized"
+            if DEV_ALLOW_MEMORY:
+                response["memory_store"] = {k: len(v) for k, v in MEMORY.items()}
     except Exception as e:
         response["database"] = f"❌ Error: {str(e)[:50]}"
     return response

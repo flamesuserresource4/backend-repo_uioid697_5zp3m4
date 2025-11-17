@@ -1,13 +1,11 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [567] using StatReload
-INFO:     Started server process [569]
+INFO:     Started reloader process [672] using StatReload
+INFO:     Started server process [674]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:45648 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:45664 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:45672 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:45676 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:58678 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:58688 - "POST /api/convert/pace-to-bpm HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -72,12 +70,17 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 156, in list_sessions
-    items = get_documents("session", query, effective_limit)
-  File "/home/workspace/database.py", line 49, in get_documents
-    raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
-Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:45672 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+  File "/home/workspace/main.py", line 134, in convert_pace_to_bpm
+    bpm = pace_to_bpm(
+        pace_value=req.pace_value,
+    ...<3 lines>...
+        target_cadence=req.target_cadence,
+    )
+  File "/home/workspace/main.py", line 84, in pace_to_bpm
+    x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
+    ^^
+UnboundLocalError: cannot access local variable 'x1' where it is not associated with a value
+INFO:     172.20.0.1:58694 - "POST /api/convert/pace-to-bpm HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -142,12 +145,20 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 156, in list_sessions
-    items = get_documents("session", query, effective_limit)
-  File "/home/workspace/database.py", line 49, in get_documents
-    raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
-Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:49018 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+  File "/home/workspace/main.py", line 134, in convert_pace_to_bpm
+    bpm = pace_to_bpm(
+        pace_value=req.pace_value,
+    ...<3 lines>...
+        target_cadence=req.target_cadence,
+    )
+  File "/home/workspace/main.py", line 84, in pace_to_bpm
+    x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
+    ^^
+UnboundLocalError: cannot access local variable 'x1' where it is not associated with a value
+INFO:     172.20.0.1:58706 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:58706 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34220 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34230 - "POST /api/convert/pace-to-bpm HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -212,14 +223,17 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 156, in list_sessions
-    items = get_documents("session", query, effective_limit)
-  File "/home/workspace/database.py", line 49, in get_documents
-    raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
-Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:49032 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:49038 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:49032 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+  File "/home/workspace/main.py", line 134, in convert_pace_to_bpm
+    bpm = pace_to_bpm(
+        pace_value=req.pace_value,
+    ...<3 lines>...
+        target_cadence=req.target_cadence,
+    )
+  File "/home/workspace/main.py", line 84, in pace_to_bpm
+    x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
+    ^^
+UnboundLocalError: cannot access local variable 'x1' where it is not associated with a value
+INFO:     172.20.0.1:34206 - "POST /api/convert/pace-to-bpm HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -284,11 +298,14 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "/usr/local/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 807, in run
     result = context.run(func, *args)
-  File "/home/workspace/main.py", line 156, in list_sessions
-    items = get_documents("session", query, effective_limit)
-  File "/home/workspace/database.py", line 49, in get_documents
-    raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
-Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:37192 - "POST /api/stripe/webhook HTTP/1.1" 200 OK
-INFO:     172.20.0.1:37206 - "GET /test HTTP/1.1" 200 OK
-INFO:     172.20.0.1:34228 - "POST /api/pro/claim HTTP/1.1" 500 Internal Server Error
+  File "/home/workspace/main.py", line 134, in convert_pace_to_bpm
+    bpm = pace_to_bpm(
+        pace_value=req.pace_value,
+    ...<3 lines>...
+        target_cadence=req.target_cadence,
+    )
+  File "/home/workspace/main.py", line 84, in pace_to_bpm
+    x1, y1; x2, y2 = anchors[i][0], anchors[i][1], anchors[i+1][0], anchors[i+1][1]
+    ^^
+UnboundLocalError: cannot access local variable 'x1' where it is not associated with a value
+INFO:     172.20.0.1:34220 - "GET /api/sessions HTTP/1.1" 200 OK
