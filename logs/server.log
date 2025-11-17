@@ -1,23 +1,32 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [747] using StatReload
-INFO:     Started server process [749]
+INFO:     Started reloader process [824] using StatReload
+INFO:     Started server process [826]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:40394 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:40396 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:40412 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:40424 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:40412 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59100 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59114 - "GET /api/sessions HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59124 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:59114 - "GET /api/sessions HTTP/1.1" 200 OK
-WARNING:  StatReload detected changes in 'main.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [749]
-INFO:     Started server process [759]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
+INFO:     172.20.0.1:54758 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:54764 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54790 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54780 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:54790 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34626 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34638 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34640 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:34640 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57576 - "OPTIONS / HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57566 - "OPTIONS / HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57576 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57566 - "OPTIONS /test HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57576 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57588 - "GET /test HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57588 - "GET /test HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57566 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57588 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57576 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:57588 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46924 - "OPTIONS /api/checkout/create HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46924 - "POST /api/checkout/create HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46934 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46934 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46934 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46934 - "GET /api/sessions HTTP/1.1" 200 OK
