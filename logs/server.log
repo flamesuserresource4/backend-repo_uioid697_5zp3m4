@@ -1,10 +1,11 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [116] using StatReload
-INFO:     Started server process [118]
+INFO:     Started reloader process [160] using StatReload
+INFO:     Started server process [162]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:54044 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:47396 - "OPTIONS /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:47402 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -74,9 +75,9 @@ Traceback (most recent call last):
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:54052 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:54050 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:54052 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:47412 - "OPTIONS /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:47396 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:47412 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -146,8 +147,11 @@ Traceback (most recent call last):
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:54082 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:54068 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:47396 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:33932 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:47414 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:47418 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
+INFO:     172.20.0.1:47426 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -217,8 +221,7 @@ Traceback (most recent call last):
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:54050 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
-INFO:     172.20.0.1:54050 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:47418 - "GET /api/sessions HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
@@ -288,4 +291,3 @@ Traceback (most recent call last):
   File "/home/workspace/database.py", line 49, in get_documents
     raise Exception("Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.")
 Exception: Database not available. Check DATABASE_URL and DATABASE_NAME environment variables.
-INFO:     172.20.0.1:47464 - "POST /api/convert/pace-to-bpm HTTP/1.1" 200 OK
